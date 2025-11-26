@@ -14,7 +14,7 @@ class RAGEngine:
     def __init__(self, index_path: str = "./faiss_index"):
         """Initialize the RAG engine with FAISS and embedding model."""
         self.index_path = index_path
-        self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self._embedding_model = None  # Lazy load
         self.dimension = 384  # all-MiniLM-L6-v2 embedding dimension
         
         # Initialize or load FAISS index
@@ -32,6 +32,13 @@ class RAGEngine:
         
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_api_key}"
+
+    @property
+    def embedding_model(self):
+        """Lazy load the embedding model only when needed."""
+        if self._embedding_model is None:
+            self._embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        return self._embedding_model
 
     def extract_text_from_pdf(self, pdf_path: str) -> str:
         """Extract text from a PDF file."""
