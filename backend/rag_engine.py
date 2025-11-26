@@ -3,42 +3,37 @@ import requests
 import pickle
 from typing import List, Dict
 from PyPDF2 import PdfReader
-import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class RAGEngine:
-    def __init__(self, index_path: str = "./faiss_index"):
-        """Initialize the RAG engine with FAISS and embedding model."""
+    def __init__(self, index_path: str = "./vector_index"):
+        """Initialize the RAG engine with TF-IDF vectorizer."""
         self.index_path = index_path
-        self._embedding_model = None  # Lazy load
-        self.dimension = 384  # all-MiniLM-L6-v2 embedding dimension
+        self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
         
-        # Initialize or load FAISS index
-        self.index_file = os.path.join(index_path, "index.faiss")
+        # Storage for documents and vectors
+        self.index_file = os.path.join(index_path, "vectors.pkl")
         self.metadata_file = os.path.join(index_path, "metadata.pkl")
         
         if os.path.exists(self.index_file):
-            self.index = faiss.read_index(self.index_file)
+            with open(self.index_file, 'rb') as f:
+                data = pickle.load(f)
+                self.vectors = data['vectors']
+                self.vectorizer = data['vectorizer']
             with open(self.metadata_file, 'rb') as f:
                 self.metadata = pickle.load(f)
         else:
-            self.index = faiss.IndexFlatL2(self.dimension)
+            self.vectors = None
             self.metadata = []
             os.makedirs(index_path, exist_ok=True)
         
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_api_key}"
-
-    @property
-    def embedding_model(self):
-        """Lazy load the embedding model only when needed."""
-        if self._embedding_model is None:
-            self._embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-        return self._embedding_model
 
     def extract_text_from_pdf(self, pdf_path: str) -> str:
         """Extract text from a PDF file."""
@@ -65,8 +60,12 @@ class RAGEngine:
         return chunks
 
     def save_index(self):
-        """Save FAISS index and metadata to disk."""
-        faiss.write_index(self.index, self.index_file)
+        """Save vectors and metadata to disk."""
+        with open(self.index_file, 'wb') as f:
+            pickle.dump({
+                'vectors': self.vectors,
+                'vectorizer': self.vectorizer
+            }, f)
         with open(self.metadata_file, 'wb') as f:
             pickle.dump(self.metadata, f)
 
@@ -81,6 +80,7 @@ class RAGEngine:
         if not pdf_files:
             return {"status": "warning", "message": "No PDF files found", "count": 0}
         
+        all_chunks = []
         total_chunks = 0
         
         for pdf_file in pdf_files:
@@ -94,14 +94,9 @@ class RAGEngine:
             # Chunk text
             chunks = self.chunk_text(text)
             
-            # Generate embeddings and store in FAISS
+            # Store metadata
             for idx, chunk in enumerate(chunks):
-                embedding = self.embedding_model.encode(chunk)
-                
-                # Add to FAISS index
-                self.index.add(np.array([embedding], dtype=np.float32))
-                
-                # Store metadata
+                all_chunks.append(chunk)
                 self.metadata.append({
                     "text": chunk,
                     "source": pdf_file,
@@ -109,8 +104,10 @@ class RAGEngine:
                 })
                 total_chunks += 1
         
-        # Save index to disk
-        self.save_index()
+        # Vectorize all chunks at once
+        if all_chunks:
+            self.vectors = self.vectorizer.fit_transform(all_chunks)
+            self.save_index()
         
         return {
             "status": "success",
@@ -119,21 +116,22 @@ class RAGEngine:
         }
 
     def retrieve_context(self, query: str, top_k: int = 3) -> List[str]:
-        """Retrieve relevant chunks from the vector database."""
-        if self.index.ntotal == 0:
+        """Retrieve relevant chunks using TF-IDF similarity."""
+        if self.vectors is None or len(self.metadata) == 0:
             return []
         
-        query_embedding = self.embedding_model.encode(query)
+        # Vectorize query
+        query_vector = self.vectorizer.transform([query])
         
-        # Search FAISS index
-        distances, indices = self.index.search(
-            np.array([query_embedding], dtype=np.float32), 
-            min(top_k, self.index.ntotal)
-        )
+        # Calculate cosine similarity
+        similarities = cosine_similarity(query_vector, self.vectors)[0]
+        
+        # Get top k indices
+        top_indices = np.argsort(similarities)[-top_k:][::-1]
         
         # Get corresponding texts
         results = []
-        for idx in indices[0]:
+        for idx in top_indices:
             if idx < len(self.metadata):
                 results.append(self.metadata[idx]["text"])
         
