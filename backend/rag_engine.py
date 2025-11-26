@@ -1,31 +1,34 @@
 import os
 import requests
+import pickle
 from typing import List, Dict
 from PyPDF2 import PdfReader
-import chromadb
-from chromadb.config import Settings
+import faiss
+import numpy as np
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 load_dotenv()
 
 class RAGEngine:
-    def __init__(self, chroma_path: str = "./chroma_db"):
-        """Initialize the RAG engine with ChromaDB and embedding model."""
-        self.chroma_path = chroma_path
+    def __init__(self, index_path: str = "./faiss_index"):
+        """Initialize the RAG engine with FAISS and embedding model."""
+        self.index_path = index_path
         self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
+        self.dimension = 384  # all-MiniLM-L6-v2 embedding dimension
         
-        # Initialize ChromaDB
-        self.chroma_client = chromadb.PersistentClient(path=chroma_path)
+        # Initialize or load FAISS index
+        self.index_file = os.path.join(index_path, "index.faiss")
+        self.metadata_file = os.path.join(index_path, "metadata.pkl")
         
-        # Get or create collection
-        try:
-            self.collection = self.chroma_client.get_collection(name="pdf_knowledge")
-        except:
-            self.collection = self.chroma_client.create_collection(
-                name="pdf_knowledge",
-                metadata={"hnsw:space": "cosine"}
-            )
+        if os.path.exists(self.index_file):
+            self.index = faiss.read_index(self.index_file)
+            with open(self.metadata_file, 'rb') as f:
+                self.metadata = pickle.load(f)
+        else:
+            self.index = faiss.IndexFlatL2(self.dimension)
+            self.metadata = []
+            os.makedirs(index_path, exist_ok=True)
         
         self.gemini_api_key = os.getenv("GEMINI_API_KEY")
         self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_api_key}"
@@ -54,6 +57,12 @@ class RAGEngine:
         
         return chunks
 
+    def save_index(self):
+        """Save FAISS index and metadata to disk."""
+        faiss.write_index(self.index, self.index_file)
+        with open(self.metadata_file, 'wb') as f:
+            pickle.dump(self.metadata, f)
+
     def ingest_pdfs(self, pdf_directory: str) -> Dict[str, int]:
         """Load and index all PDFs from the specified directory."""
         if not os.path.exists(pdf_directory):
@@ -78,17 +87,23 @@ class RAGEngine:
             # Chunk text
             chunks = self.chunk_text(text)
             
-            # Generate embeddings and store in ChromaDB
+            # Generate embeddings and store in FAISS
             for idx, chunk in enumerate(chunks):
-                embedding = self.embedding_model.encode(chunk).tolist()
+                embedding = self.embedding_model.encode(chunk)
                 
-                self.collection.add(
-                    embeddings=[embedding],
-                    documents=[chunk],
-                    metadatas=[{"source": pdf_file, "chunk_id": idx}],
-                    ids=[f"{pdf_file}_{idx}"]
-                )
+                # Add to FAISS index
+                self.index.add(np.array([embedding], dtype=np.float32))
+                
+                # Store metadata
+                self.metadata.append({
+                    "text": chunk,
+                    "source": pdf_file,
+                    "chunk_id": idx
+                })
                 total_chunks += 1
+        
+        # Save index to disk
+        self.save_index()
         
         return {
             "status": "success",
@@ -98,16 +113,24 @@ class RAGEngine:
 
     def retrieve_context(self, query: str, top_k: int = 3) -> List[str]:
         """Retrieve relevant chunks from the vector database."""
-        query_embedding = self.embedding_model.encode(query).tolist()
+        if self.index.ntotal == 0:
+            return []
         
-        results = self.collection.query(
-            query_embeddings=[query_embedding],
-            n_results=top_k
+        query_embedding = self.embedding_model.encode(query)
+        
+        # Search FAISS index
+        distances, indices = self.index.search(
+            np.array([query_embedding], dtype=np.float32), 
+            min(top_k, self.index.ntotal)
         )
         
-        if results and results['documents']:
-            return results['documents'][0]
-        return []
+        # Get corresponding texts
+        results = []
+        for idx in indices[0]:
+            if idx < len(self.metadata):
+                results.append(self.metadata[idx]["text"])
+        
+        return results
 
     def generate_response(self, query: str, context: List[str]) -> str:
         """Generate a response using Gemini API with retrieved context."""

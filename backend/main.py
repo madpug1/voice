@@ -22,8 +22,8 @@ app.add_middleware(
 
 # Initialize RAG engine
 pdf_dir = os.getenv("PDF_DATA_DIR", "./data/pdfs")
-chroma_path = os.getenv("CHROMA_DB_PATH", "./chroma_db")
-rag_engine = RAGEngine(chroma_path=chroma_path)
+index_path = os.getenv("FAISS_INDEX_PATH", "./faiss_index")
+rag_engine = RAGEngine(index_path=index_path)
 
 # Initialize Twilio IVR handler
 twilio_handler = TwilioIVRHandler(rag_engine)
@@ -41,7 +41,7 @@ async def startup_event():
     """Auto-ingest PDFs on startup if data directory exists."""
     print("🚀 Starting RAG API...")
     print(f"📁 PDF Directory: {pdf_dir}")
-    print(f"💾 ChromaDB Path: {chroma_path}")
+    print(f"💾 FAISS Index Path: {index_path}")
     
     # Check if API key is set
     if not os.getenv("GEMINI_API_KEY"):
