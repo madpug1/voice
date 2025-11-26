@@ -6,6 +6,6 @@ sentence-transformers==2.2.2
 python-dotenv==1.0.0
 requests==2.31.0
 python-multipart==0.0.6
-pydantic==2.5.3
+pydantic>=2.10.0
 twilio==9.0.4
 numpy>=2.0.0
