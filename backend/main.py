@@ -157,46 +157,36 @@ async def whatsapp_incoming(
     From: str = Form(...),
     Body: str = Form(None),
     NumMedia: int = Form(0),
-    MediaUrl0: str = Form(None),
     MediaContentType0: str = Form(None)
 ):
     """
-    Handle incoming WhatsApp messages (text or voice notes).
+    Handle incoming WhatsApp messages (text and voice notes).
+    Voice notes are automatically transcribed by Twilio.
     """
     logger.info(f"Received WhatsApp message from {From}")
     
     response = MessagingResponse()
     
-    # Check if it's a voice message
+    # Check if there's a voice message
     if NumMedia > 0 and MediaContentType0 and 'audio' in MediaContentType0:
-        logger.info("Processing voice message...")
-        
-        # Process voice message
-        auth = (twilio_account_sid, twilio_auth_token)
-        result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
-        
-        # Generate voice response
-        try:
-            voice_file = whatsapp_handler.generate_voice_response(result['text'])
-            
-            # Upload voice file to Twilio and send
-            # Note: In production, you'd upload to a public URL first
-            # For now, send text response
-            response.message(f"🎤 You said: {result['transcription']}\n\n{result['text']}")
-            
-            logger.info("Voice response sent")
-        except Exception as e:
-            logger.error(f"Error sending voice response: {e}")
-            response.message(result['text'])
+        logger.info("Voice message detected")
+        # For voice messages, Twilio will send the transcription in the Body field
+        # if transcription is enabled in Twilio settings
+        if Body:
+            logger.info(f"Processing transcribed voice: {Body}")
+            answer = whatsapp_handler.process_text_message(Body)
+            response.message(f"🎤 You said: {Body}\n\n{answer}")
+        else:
+            response.message("I received your voice message, but couldn't transcribe it. Please try sending a text message or enable transcription in Twilio settings.")
     
     elif Body:
         # Handle text message
         logger.info(f"Processing text message: {Body}")
-        result = rag_engine.query(Body)
-        response.message(result['answer'])
+        answer = whatsapp_handler.process_text_message(Body)
+        response.message(answer)
     
     else:
-        response.message("Please send a voice note or text message with your question!")
+        response.message("Please send a text message or voice note with your question!")
     
     return Response(content=str(response), media_type="application/xml")
 

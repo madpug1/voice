@@ -143,14 +143,19 @@ class RAGEngine:
         context_text = "\n\n".join(context)
         
         # Create prompt with context
-        prompt = f"""You are a helpful assistant answering questions based on the provided context.
+        prompt = f"""You are a helpful AI assistant. Answer questions concisely and clearly.
 
 Context:
 {context_text}
 
 Question: {query}
 
-Please provide a comprehensive answer based on the context above. If the context doesn't contain relevant information, say so."""
+Instructions:
+- Provide a brief, direct answer (2-4 sentences maximum)
+- Summarize key points in your own words - DO NOT copy-paste entire paragraphs
+- Use simple, conversational language
+- If the context doesn't have the answer, say "I don't have that information in my knowledge base"
+- Be specific and to the point"""
 
         # Call Gemini API
         try:

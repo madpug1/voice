@@ -1,109 +1,102 @@
-# WhatsApp Voice Note Setup Guide
+# WhatsApp Voice Note Setup (Updated)
 
-## Quick Setup (5 Minutes)
+## Twilio's Built-in Voice Transcription
+
+Twilio can automatically transcribe voice messages sent via WhatsApp! No extra libraries needed.
+
+---
+
+## Setup Steps
 
 ### 1. Set Up Twilio WhatsApp Sandbox
 
-1. Go to Twilio Console: https://console.twilio.com/
+1. Go to: https://console.twilio.com/
 2. Navigate to **Messaging** → **Try it out** → **Send a WhatsApp message**
 3. You'll see:
-   - A sandbox number (e.g., `+1 415 523 8886`)
-   - A join code (e.g., `join happy-tiger`)
+   - Sandbox number (e.g., `+1 415 523 8886`)
+   - Join code (e.g., `join happy-tiger`)
 
-4. **Activate the sandbox**:
-   - Open WhatsApp on your phone
-   - Send a message to the sandbox number: `join happy-tiger` (use your actual code)
-   - You'll get a confirmation message
+4. **Activate on your phone**:
+   - Open WhatsApp
+   - Send message to sandbox number: `join happy-tiger` (use your code)
+   - Get confirmation
 
-### 2. Configure Webhook
+### 2. Enable Voice Transcription (Important!)
 
-In the Twilio WhatsApp Sandbox settings:
-
-1. Find **"When a message comes in"**
-2. Enter your Render URL: `https://your-app-url.onrender.com/whatsapp/incoming`
-3. Method: **HTTP POST**
+1. In Twilio Console → **Messaging** → **Settings** → **WhatsApp Sandbox Settings**
+2. Scroll to **"Media Intelligence"** or **"Transcription"** section
+3. **Enable "Transcribe audio messages"**
 4. Click **Save**
 
-### 3. Add Environment Variables (If Not Already Added)
+### 3. Configure Webhook
+
+1. Still in WhatsApp Sandbox settings
+2. Find **"When a message comes in"**
+3. Enter: `https://your-render-url.onrender.com/whatsapp/incoming`
+4. Method: **HTTP POST**
+5. Click **Save**
+
+### 4. Add Environment Variables (If Not Already Added)
 
 In Render Dashboard → Environment:
 - `TWILIO_ACCOUNT_SID`: Your Account SID
 - `TWILIO_AUTH_TOKEN`: Your Auth Token
 - `GEMINI_API_KEY`: Your Gemini API key
 
-### 4. Deploy
-
-```powershell
-git add .
-git commit -m "Add WhatsApp voice note integration"
-git push
-```
-
-Render will auto-deploy!
-
 ---
 
 ## How to Use
 
-### Send Voice Notes:
-
+### Send Text Messages:
 1. Open WhatsApp
-2. Go to your chat with the Twilio sandbox number
-3. **Record and send a voice note** with your question
-4. Wait a few seconds
-5. You'll get a text response with:
-   - What you said (transcription)
-   - The AI's answer
+2. Send text: `What is machine learning?`
+3. Get AI response
 
-### Example:
-
-**You**: 🎤 *Voice note: "What is this document about?"*
-
-**Bot**: 
-```
-🎤 You said: What is this document about?
-
-Based on the documents in my knowledge base, this document discusses...
-```
+### Send Voice Notes:
+1. Open WhatsApp
+2. **Record and send a voice note**: *"What is this document about?"*
+3. Twilio transcribes it automatically
+4. You get response: 
+   ```
+   🎤 You said: What is this document about?
+   
+   [AI's answer based on your PDFs]
+   ```
 
 ---
 
 ## Features
 
-✅ **Voice Notes**: Send voice messages  
-✅ **Text Messages**: Also works with text  
-✅ **Speech-to-Text**: Automatic transcription  
-✅ **RAG Integration**: Queries your PDFs  
-✅ **100% Free**: No calling charges  
+✅ **Text Messages**: Type and send  
+✅ **Voice Notes**: Record and send (auto-transcribed by Twilio)  
+✅ **100% Free**: No extra costs during trial  
+✅ **No Extra Libraries**: Uses Twilio's built-in transcription  
 
 ---
 
 ## Troubleshooting
 
-### "I didn't get a response"
-- Check Render logs for errors
-- Verify webhook URL is correct
-- Make sure environment variables are set
+### "Voice message not transcribed"
+- Make sure you enabled transcription in Twilio settings
+- Check that Media Intelligence is turned on
+- Voice notes must be clear audio
 
-### "Audio transcription failed"
-- Speak clearly
-- Avoid background noise
-- Try sending a text message to test if RAG works
+### "No response"
+- Check Render logs
+- Verify webhook URL is correct
+- Ensure environment variables are set
 
 ### "Sandbox expired"
-- Twilio sandbox expires after 3 days of inactivity
-- Just send `join <code>` again to reactivate
+- Send `join <code>` again to reactivate
 
 ---
 
-## Production (Optional)
+## Notes
 
-For production with your own WhatsApp Business number:
-1. Apply for WhatsApp Business API
-2. Get approved by Meta (1-2 weeks)
-3. Update webhook to production number
-4. Cost: ~$0.005 per message
+- **Transcription accuracy**: Depends on audio quality and clarity
+- **Supported languages**: English works best (configure in Twilio for other languages)
+- **Free tier**: Twilio trial includes transcription
 
 ---
 
-**You're all set!** Send a voice note and test it out! 🎉
+**You're all set!** Send voice notes or text messages and get AI responses! 🎤💬
