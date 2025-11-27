@@ -4,8 +4,15 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from rag_engine import RAGEngine
 from twilio_handler import TwilioIVRHandler
+from whatsapp_handler import WhatsAppHandler
+from twilio.rest import Client
+from twilio.twiml.messaging_response import MessagingResponse
 import os
+import logging
 from dotenv import load_dotenv
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -27,6 +34,14 @@ rag_engine = RAGEngine(index_path=index_path)
 
 # Initialize Twilio IVR handler
 twilio_handler = TwilioIVRHandler(rag_engine)
+
+# Initialize WhatsApp handler
+whatsapp_handler = WhatsAppHandler(rag_engine)
+
+# Initialize Twilio client
+twilio_account_sid = os.getenv("TWILIO_ACCOUNT_SID")
+twilio_auth_token = os.getenv("TWILIO_AUTH_TOKEN")
+twilio_client = Client(twilio_account_sid, twilio_auth_token) if twilio_account_sid and twilio_auth_token else None
 
 class QueryRequest(BaseModel):
     query: str
@@ -136,6 +151,54 @@ async def voice_continue(SpeechResult: str = Form(None)):
     """
     twiml = twilio_handler.handle_continue(SpeechResult or "")
     return Response(content=twiml, media_type="application/xml")
+
+@app.post("/whatsapp/incoming")
+async def whatsapp_incoming(
+    From: str = Form(...),
+    Body: str = Form(None),
+    NumMedia: int = Form(0),
+    MediaUrl0: str = Form(None),
+    MediaContentType0: str = Form(None)
+):
+    """
+    Handle incoming WhatsApp messages (text or voice notes).
+    """
+    logger.info(f"Received WhatsApp message from {From}")
+    
+    response = MessagingResponse()
+    
+    # Check if it's a voice message
+    if NumMedia > 0 and MediaContentType0 and 'audio' in MediaContentType0:
+        logger.info("Processing voice message...")
+        
+        # Process voice message
+        auth = (twilio_account_sid, twilio_auth_token)
+        result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
+        
+        # Generate voice response
+        try:
+            voice_file = whatsapp_handler.generate_voice_response(result['text'])
+            
+            # Upload voice file to Twilio and send
+            # Note: In production, you'd upload to a public URL first
+            # For now, send text response
+            response.message(f"🎤 You said: {result['transcription']}\n\n{result['text']}")
+            
+            logger.info("Voice response sent")
+        except Exception as e:
+            logger.error(f"Error sending voice response: {e}")
+            response.message(result['text'])
+    
+    elif Body:
+        # Handle text message
+        logger.info(f"Processing text message: {Body}")
+        result = rag_engine.query(Body)
+        response.message(result['answer'])
+    
+    else:
+        response.message("Please send a voice note or text message with your question!")
+    
+    return Response(content=str(response), media_type="application/xml")
 
 if __name__ == "__main__":
     import uvicorn
