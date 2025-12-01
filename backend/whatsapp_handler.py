@@ -34,24 +34,39 @@ class WhatsAppHandler:
             raise
     
     def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio using Gemini API."""
+        """Transcribe audio using Gemini REST API."""
         try:
             import base64
             
             # Read audio file as base64
             with open(audio_file, 'rb') as f:
-                audio_data = base64.b64encode(f.read()).decode('utf-8')
+                audio_data = base64.standard_b64encode(f.read()).decode('utf-8')
             
-            # Generate transcription using Gemini
-            response = self.model.generate_content([
-                {
-                    "mime_type": "audio/ogg",
-                    "data": audio_data
-                },
-                "Transcribe this audio. Only return the transcribed text, nothing else."
-            ])
+            # Use Gemini REST API directly
+            api_key = os.getenv("GEMINI_API_KEY")
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
             
-            transcription = response.text.strip()
+            payload = {
+                "contents": [{
+                    "parts": [
+                        {
+                            "inline_data": {
+                                "mime_type": "audio/ogg",
+                                "data": audio_data
+                            }
+                        },
+                        {
+                            "text": "Transcribe this audio. Only return the transcribed text, nothing else."
+                        }
+                    ]
+                }]
+            }
+            
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            
+            result = response.json()
+            transcription = result['candidates'][0]['content']['parts'][0]['text'].strip()
             logger.info(f"Transcribed: {transcription}")
             
             return transcription
