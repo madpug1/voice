@@ -2,7 +2,6 @@ import os
 import requests
 import assemblyai as aai
 from gtts import gTTS
-from pydub import AudioSegment
 from typing import Dict
 from rag_engine import RAGEngine
 import logging
