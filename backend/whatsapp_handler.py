@@ -1,6 +1,6 @@
 import os
 import requests
-import speech_recognition as sr
+import assemblyai as aai
 from gtts import gTTS
 from pydub import AudioSegment
 from typing import Dict
@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 class WhatsAppHandler:
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
-        self.recognizer = sr.Recognizer()
+        # AssemblyAI API key from environment
+        aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
     
     def download_audio(self, media_url: str, auth: tuple) -> str:
         """Download audio file from Twilio."""
@@ -32,31 +33,18 @@ class WhatsAppHandler:
             logger.error(f"Error downloading audio: {e}")
             raise
     
-    def convert_audio_to_wav(self, input_file: str) -> str:
-        """Convert audio to WAV format for speech recognition."""
-        try:
-            audio = AudioSegment.from_file(input_file)
-            wav_file = tempfile.NamedTemporaryFile(delete=False, suffix='.wav')
-            audio.export(wav_file.name, format='wav')
-            return wav_file.name
-        except Exception as e:
-            logger.error(f"Error converting audio: {e}")
-            raise
-    
     def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio to text using Google Speech Recognition."""
+        """Transcribe audio using AssemblyAI."""
         try:
-            with sr.AudioFile(audio_file) as source:
-                audio_data = self.recognizer.record(source)
-                text = self.recognizer.recognize_google(audio_data)
-                logger.info(f"Transcribed: {text}")
-                return text
-        except sr.UnknownValueError:
-            logger.error("Could not understand audio")
-            return ""
-        except sr.RequestError as e:
-            logger.error(f"Speech recognition error: {e}")
-            return ""
+            transcriber = aai.Transcriber()
+            transcript = transcriber.transcribe(audio_file)
+            
+            if transcript.status == aai.TranscriptStatus.error:
+                logger.error(f"Transcription error: {transcript.error}")
+                return ""
+            
+            logger.info(f"Transcribed: {transcript.text}")
+            return transcript.text
         except Exception as e:
             logger.error(f"Transcription error: {e}")
             return ""
@@ -64,20 +52,22 @@ class WhatsAppHandler:
     def process_voice_message(self, media_url: str, auth: tuple) -> Dict[str, str]:
         """Download and transcribe voice message."""
         audio_file = None
-        wav_file = None
         
         try:
+            # Check if AssemblyAI API key is set
+            if not os.getenv("ASSEMBLYAI_API_KEY"):
+                return {
+                    "text": "Voice transcription is not configured. Please send a text message instead.",
+                    "transcription": ""
+                }
+            
             # Download audio
             logger.info("Downloading voice message...")
             audio_file = self.download_audio(media_url, auth)
             
-            # Convert to WAV
-            logger.info("Converting audio format...")
-            wav_file = self.convert_audio_to_wav(audio_file)
-            
             # Transcribe
             logger.info("Transcribing audio...")
-            transcription = self.transcribe_audio(wav_file)
+            transcription = self.transcribe_audio(audio_file)
             
             if not transcription:
                 return {
@@ -104,8 +94,6 @@ class WhatsAppHandler:
             # Cleanup
             if audio_file and os.path.exists(audio_file):
                 os.unlink(audio_file)
-            if wav_file and os.path.exists(wav_file):
-                os.unlink(wav_file)
     
     def process_text_message(self, text: str) -> str:
         """Process text message and generate response."""
