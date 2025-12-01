@@ -1,6 +1,6 @@
 import os
 import requests
-import assemblyai as aai
+import google.generativeai as genai
 from gtts import gTTS
 from typing import Dict
 from rag_engine import RAGEngine
@@ -13,8 +13,9 @@ logger = logging.getLogger(__name__)
 class WhatsAppHandler:
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
-        # AssemblyAI API key from environment
-        aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
+        # Configure Gemini API
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+        self.model = genai.GenerativeModel('gemini-1.5-flash')
     
     def download_audio(self, media_url: str, auth: tuple) -> str:
         """Download audio file from Twilio."""
@@ -33,17 +34,24 @@ class WhatsAppHandler:
             raise
     
     def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio using AssemblyAI."""
+        """Transcribe audio using Gemini API."""
         try:
-            transcriber = aai.Transcriber()
-            transcript = transcriber.transcribe(audio_file)
+            # Upload audio file to Gemini
+            audio_file_obj = genai.upload_file(path=audio_file)
             
-            if transcript.status == aai.TranscriptStatus.error:
-                logger.error(f"Transcription error: {transcript.error}")
-                return ""
+            # Generate transcription
+            response = self.model.generate_content([
+                "Transcribe this audio. Only return the transcribed text, nothing else.",
+                audio_file_obj
+            ])
             
-            logger.info(f"Transcribed: {transcript.text}")
-            return transcript.text
+            transcription = response.text.strip()
+            logger.info(f"Transcribed: {transcription}")
+            
+            # Delete the uploaded file
+            genai.delete_file(audio_file_obj.name)
+            
+            return transcription
         except Exception as e:
             logger.error(f"Transcription error: {e}")
             return ""
@@ -53,19 +61,12 @@ class WhatsAppHandler:
         audio_file = None
         
         try:
-            # Check if AssemblyAI API key is set
-            if not os.getenv("ASSEMBLYAI_API_KEY"):
-                return {
-                    "text": "Voice transcription is not configured. Please send a text message instead.",
-                    "transcription": ""
-                }
-            
             # Download audio
             logger.info("Downloading voice message...")
             audio_file = self.download_audio(media_url, auth)
             
             # Transcribe
-            logger.info("Transcribing audio...")
+            logger.info("Transcribing audio with Gemini...")
             transcription = self.transcribe_audio(audio_file)
             
             if not transcription:
