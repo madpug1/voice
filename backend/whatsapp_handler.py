@@ -1,6 +1,6 @@
 import os
 import requests
-import google.generativeai as genai
+import whisper
 from gtts import gTTS
 from typing import Dict
 from rag_engine import RAGEngine
@@ -13,9 +13,10 @@ logger = logging.getLogger(__name__)
 class WhatsAppHandler:
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
-        # Configure Gemini API
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model = genai.GenerativeModel('gemini-1.5-flash')
+        # Load Whisper model (using tiny model for speed and memory efficiency)
+        logger.info("Loading Whisper model...")
+        self.whisper_model = whisper.load_model("tiny")
+        logger.info("Whisper model loaded!")
     
     def download_audio(self, media_url: str, auth: tuple) -> str:
         """Download audio file from Twilio."""
@@ -34,45 +35,15 @@ class WhatsAppHandler:
             raise
     
     def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio using Gemini REST API."""
+        """Transcribe audio using Whisper."""
         try:
-            import base64
-            
-            # Read audio file as base64
-            with open(audio_file, 'rb') as f:
-                audio_data = base64.standard_b64encode(f.read()).decode('utf-8')
-            
-            # Use Gemini REST API directly
-            api_key = os.getenv("GEMINI_API_KEY")
-            url = f"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key={api_key}"
-            
-            payload = {
-                "contents": [{
-                    "parts": [
-                        {
-                            "inline_data": {
-                                "mime_type": "audio/ogg",
-                                "data": audio_data
-                            }
-                        },
-                        {
-                            "text": "Transcribe this audio. Only return the transcribed text, nothing else."
-                        }
-                    ]
-                }]
-            }
-            
-            response = requests.post(url, json=payload)
-            response.raise_for_status()
-            
-            result = response.json()
-            transcription = result['candidates'][0]['content']['parts'][0]['text'].strip()
+            logger.info("Transcribing with Whisper...")
+            result = self.whisper_model.transcribe(audio_file)
+            transcription = result["text"].strip()
             logger.info(f"Transcribed: {transcription}")
-            
             return transcription
         except Exception as e:
             logger.error(f"Transcription error: {e}")
-            logger.error(f"Error details: {str(e)}")
             return ""
     
     def process_voice_message(self, media_url: str, auth: tuple) -> Dict[str, str]:
@@ -85,7 +56,7 @@ class WhatsAppHandler:
             audio_file = self.download_audio(media_url, auth)
             
             # Transcribe
-            logger.info("Transcribing audio with Gemini...")
+            logger.info("Transcribing audio...")
             transcription = self.transcribe_audio(audio_file)
             
             if not transcription:
