@@ -157,27 +157,28 @@ async def whatsapp_incoming(
     From: str = Form(...),
     Body: str = Form(None),
     NumMedia: int = Form(0),
-    MediaContentType0: str = Form(None)
+    MediaContentType0: str = Form(None),
+    MediaUrl0: str = Form(None)
 ):
     """
     Handle incoming WhatsApp messages (text and voice notes).
-    Voice notes are automatically transcribed by Twilio.
     """
     logger.info(f"Received WhatsApp message from {From}")
     
     response = MessagingResponse()
     
     # Check if there's a voice message
-    if NumMedia > 0 and MediaContentType0 and 'audio' in MediaContentType0:
-        logger.info("Voice message detected")
-        # For voice messages, Twilio will send the transcription in the Body field
-        # if transcription is enabled in Twilio settings
-        if Body:
-            logger.info(f"Processing transcribed voice: {Body}")
-            answer = whatsapp_handler.process_text_message(Body)
-            response.message(f"🎤 You said: {Body}\n\n{answer}")
+    if NumMedia > 0 and MediaContentType0 and 'audio' in MediaContentType0 and MediaUrl0:
+        logger.info("Processing voice message...")
+        
+        # Download and transcribe voice message
+        auth = (twilio_account_sid, twilio_auth_token)
+        result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
+        
+        if result['transcription']:
+            response.message(f"🎤 You said: {result['transcription']}\n\n{result['text']}")
         else:
-            response.message("I received your voice message, but couldn't transcribe it. Please try sending a text message or enable transcription in Twilio settings.")
+            response.message(result['text'])
     
     elif Body:
         # Handle text message
