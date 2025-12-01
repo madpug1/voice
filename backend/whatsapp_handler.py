@@ -36,24 +36,28 @@ class WhatsAppHandler:
     def transcribe_audio(self, audio_file: str) -> str:
         """Transcribe audio using Gemini API."""
         try:
-            # Upload audio file to Gemini
-            audio_file_obj = genai.upload_file(path=audio_file)
+            import base64
             
-            # Generate transcription
+            # Read audio file as base64
+            with open(audio_file, 'rb') as f:
+                audio_data = base64.b64encode(f.read()).decode('utf-8')
+            
+            # Generate transcription using Gemini
             response = self.model.generate_content([
-                "Transcribe this audio. Only return the transcribed text, nothing else.",
-                audio_file_obj
+                {
+                    "mime_type": "audio/ogg",
+                    "data": audio_data
+                },
+                "Transcribe this audio. Only return the transcribed text, nothing else."
             ])
             
             transcription = response.text.strip()
             logger.info(f"Transcribed: {transcription}")
             
-            # Delete the uploaded file
-            genai.delete_file(audio_file_obj.name)
-            
             return transcription
         except Exception as e:
             logger.error(f"Transcription error: {e}")
+            logger.error(f"Error details: {str(e)}")
             return ""
     
     def process_voice_message(self, media_url: str, auth: tuple) -> Dict[str, str]:
