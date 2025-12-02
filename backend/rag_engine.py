@@ -131,6 +131,10 @@ class RAGEngine:
             print("⚠️  Index is empty")
             return []
         
+        # Debug: Print available documents
+        sources = set(m['source'] for m in self.metadata)
+        print(f"📚 Index contains {len(sources)} documents: {list(sources)}")
+        
         try:
             print(f"🔍 Processing Query: '{query}'")
             
