@@ -75,6 +75,23 @@ class WhatsAppHandler:
             logger.error(f"Transcription error: {e}")
             return ""
     
+    def generate_audio_response(self, text: str) -> str:
+        """Generate audio file from text using gTTS."""
+        try:
+            # Create temporary file for audio
+            audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
+            audio_file.close()
+            
+            # Generate speech
+            tts = gTTS(text=text, lang='en', slow=False)
+            tts.save(audio_file.name)
+            
+            logger.info(f"Generated audio response: {audio_file.name}")
+            return audio_file.name
+        except Exception as e:
+            logger.error(f"Error generating audio: {e}")
+            return None
+    
     def process_voice_message(self, media_url: str, auth: tuple) -> Dict[str, str]:
         """Download and transcribe voice message."""
         audio_file = None
@@ -96,23 +113,30 @@ class WhatsAppHandler:
             if not transcription:
                 return {
                     "text": "Sorry, I couldn't understand the audio. Please try again or send a text message.",
-                    "transcription": ""
+                    "transcription": "",
+                    "audio_file": None
                 }
             
             # Query RAG
             logger.info(f"Querying RAG: {transcription}")
             result = self.rag_engine.query(transcription)
             
+            # Generate audio response
+            logger.info("Generating audio response...")
+            audio_response = self.generate_audio_response(result['answer'])
+            
             return {
                 "text": result['answer'],
-                "transcription": transcription
+                "transcription": transcription,
+                "audio_file": audio_response
             }
             
         except Exception as e:
             logger.error(f"Error processing voice: {e}")
             return {
                 "text": "Sorry, I encountered an error processing your voice message. Please try sending a text message.",
-                "transcription": ""
+                "transcription": "",
+                "audio_file": None
             }
         finally:
             # Cleanup
