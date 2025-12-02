@@ -177,11 +177,11 @@ async def whatsapp_incoming(
             result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
             
             if result['transcription']:
-                msg = f"🎤 You said: {result['transcription']}\n\n{result['text']}"
-                # Limit to 1600 chars for WhatsApp
-                if len(msg) > 1600:
-                    msg = msg[:1597] + "..."
-                response.message(msg)
+                # Just send the answer directly
+                answer = result['text']
+                if len(answer) > 1600:
+                    answer = answer[:1597] + "..."
+                response.message(answer)
             else:
                 response.message(result['text'][:1600])
         
