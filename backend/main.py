@@ -93,6 +93,19 @@ async def root():
         "version": "1.0.0"
     }
 
+@app.get("/debug/index")
+async def debug_index():
+    """Debug endpoint to check ingested documents."""
+    if not rag_engine.metadata:
+        return {"count": 0, "documents": []}
+    
+    documents = list(set([m['source'] for m in rag_engine.metadata]))
+    return {
+        "count": len(rag_engine.metadata),
+        "num_documents": len(documents),
+        "documents": documents
+    }
+
 @app.post("/ingest")
 async def ingest_pdfs():
     """

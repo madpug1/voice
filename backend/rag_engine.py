@@ -89,7 +89,10 @@ class RAGEngine:
             # Extract text
             text = self.extract_text_from_pdf(pdf_path)
             if not text:
+                print(f"⚠️  WARNING: No text extracted from {pdf_file}")
                 continue
+            
+            print(f"✅ Extracted {len(text)} characters from {pdf_file}")
             
             # Chunk text
             chunks = self.chunk_text(text)
