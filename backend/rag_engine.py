@@ -12,12 +12,9 @@ load_dotenv()
 
 class RAGEngine:
     def __init__(self, index_path: str = "./vector_index"):
-        """Initialize the RAG engine with TF-IDF vectorizer."""
         self.index_path = index_path
-        # Use all unique words (no limit) to ensure small documents are fully indexed
         self.vectorizer = TfidfVectorizer(max_features=None, stop_words='english')
         
-        # Storage for documents and vectors
         self.index_file = os.path.join(index_path, "vectors.pkl")
         self.metadata_file = os.path.join(index_path, "metadata.pkl")
         
@@ -37,7 +34,6 @@ class RAGEngine:
         self.gemini_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={self.gemini_api_key}"
 
     def extract_text_from_pdf(self, pdf_path: str) -> str:
-        """Extract text from a PDF file."""
         try:
             reader = PdfReader(pdf_path)
             text = ""
@@ -49,7 +45,6 @@ class RAGEngine:
             return ""
 
     def chunk_text(self, text: str, chunk_size: int = 500, overlap: int = 50) -> List[str]:
-        """Split text into overlapping chunks."""
         words = text.split()
         chunks = []
         
@@ -61,7 +56,6 @@ class RAGEngine:
         return chunks
 
     def save_index(self):
-        """Save vectors and metadata to disk."""
         with open(self.index_file, 'wb') as f:
             pickle.dump({
                 'vectors': self.vectors,
@@ -71,7 +65,6 @@ class RAGEngine:
             pickle.dump(self.metadata, f)
 
     def clear_index(self):
-        """Completely clear vectors and metadata, both in memory and on disk."""
         self.metadata = []
         self.vectors = None
         if os.path.exists(self.index_file):
@@ -80,12 +73,10 @@ class RAGEngine:
             os.remove(self.metadata_file)
 
     def ingest_pdfs(self, pdf_directory: str) -> Dict[str, int]:
-        """Load and index all PDFs from the specified directory."""
         if not os.path.exists(pdf_directory):
             os.makedirs(pdf_directory)
             return {"status": "error", "message": "PDF directory created but empty", "count": 0}
 
-        # 🔁 HARD RESET: clear in-memory index + metadata
         self.clear_index()
 
         pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith('.pdf')]
@@ -99,7 +90,6 @@ class RAGEngine:
         for pdf_file in pdf_files:
             pdf_path = os.path.join(pdf_directory, pdf_file)
             
-            # Extract text
             text = self.extract_text_from_pdf(pdf_path)
             if not text:
                 print(f"⚠️  WARNING: No text extracted from {pdf_file}")
@@ -107,10 +97,8 @@ class RAGEngine:
             
             print(f"✅ Extracted {len(text)} characters from {pdf_file}")
             
-            # Chunk text
             chunks = self.chunk_text(text)
             
-            # Store metadata
             for idx, chunk in enumerate(chunks):
                 all_chunks.append(chunk)
                 self.metadata.append({
@@ -120,7 +108,6 @@ class RAGEngine:
                 })
                 total_chunks += 1
         
-        # Vectorize all chunks at once
         if all_chunks:
             self.vectors = self.vectorizer.fit_transform(all_chunks)
             print(f"✅ Vocabulary size: {len(self.vectorizer.vocabulary_)} unique terms")
@@ -133,38 +120,30 @@ class RAGEngine:
         }
 
     def retrieve_context(self, query: str, top_k: int = 3) -> List[str]:
-        """Retrieve relevant chunks using TF-IDF similarity."""
         if self.vectors is None or len(self.metadata) == 0:
             print("⚠️  Index is empty")
             return []
         
-        # Debug: Print available documents
         sources = set(m['source'] for m in self.metadata)
         print(f"📚 Index contains {len(sources)} documents: {list(sources)}")
         
         try:
             print(f"🔍 Processing Query: '{query}'")
             
-            # Check if query terms are in vocabulary
             terms = query.lower().split()
             known_terms = [t for t in terms if t in self.vectorizer.vocabulary_]
             print(f"   Vocabulary matches: {known_terms} (out of {terms})")
             
-            # Vectorize query
             query_vector = self.vectorizer.transform([query])
             
-            # Check if query vector is empty
             if query_vector.nnz == 0:
                 print(f"⚠️  Query has NO matching terms in the vocabulary!")
                 return []
             
-            # Calculate cosine similarity
             similarities = cosine_similarity(query_vector, self.vectors).flatten()
             
-            # Get top k indices
             top_indices = np.argsort(similarities)[-top_k:][::-1]
             
-            # Get corresponding texts
             results = []
             for idx in top_indices:
                 score = similarities[idx]
@@ -182,99 +161,77 @@ class RAGEngine:
             return []
 
     def generate_response(self, query: str, context: List[str]) -> str:
-        """Generate a response using Gemini API with retrieved context."""
-        # Prepare context
+        if not self.gemini_api_key:
+            return "Error: GEMINI_API_KEY not configured"
+        
+        if not context:
+            return "I couldn't find relevant information in the knowledge base. Please make sure PDFs are ingested."
+        
         context_text = "\n\n".join(context)
         
-        # Create prompt with context
-        prompt = f"""You are an AI assistant that answers user questions only using the information found in the provided knowledge base (RAG context).
-The user is chatting with you via WhatsApp, so keep messages clear, short, and easy to read.
+        system_prompt = """You are a helpful AI assistant that answers questions based ONLY on the provided knowledge base.
 
-Context:
-{context_text}
+CRITICAL RULES:
+1. ONLY use information from the knowledge base provided below
+2. If the answer is not in the knowledge base, say: "I don't have this information in the knowledge base provided."
+3. Be concise and direct - this is for WhatsApp messaging
+4. Keep responses under 500 characters when possible
+5. Use simple language, avoid jargon
+6. Do NOT make up information or use external knowledge
+7. Always refer to the source as "knowledge base" not "document"
 
-Question: {query}
+KNOWLEDGE BASE:
+{context}
 
-Core Rules:
+USER QUESTION: {query}
 
-1. Use only the provided knowledge base
-   - Base your answers strictly on the content in the retrieved context
-   - If the answer is not clearly supported by the knowledge base, say: "I don't have this information"
-   - Do not guess, invent, or rely on outside knowledge
-
-2. Be straight to the point
-   - Start with the direct answer in the first sentence
-   - Use short, precise sentences
-   - Avoid long introductions, disclaimers, or explanations unless asked
-
-3. Respect the knowledge base
-   - If the knowledge base is unclear or conflicting, explain briefly and say you cannot be certain
-   - If multiple interpretations exist, mention them briefly and stay neutral
-
-4. If the question is outside scope
-   - If the user asks about anything not covered in the knowledge base, respond: "I don't have this information in the knowledge base provided."
-
-5. Formatting & style (for WhatsApp)
-   - Keep answers compact (1-4 short paragraphs or a brief list)
-   - Use lists only when they improve clarity
-   - Avoid emojis unless the user uses them first
-   - Use simple language, no heavy jargon unless it appears in the knowledge base
-
-6. Follow-up questions
-   - If the question is ambiguous but about the knowledge base, ask one short clarifying question
-   - If you cannot answer even with clarification, reply: "I don't have this information"
-
-Answer:"""
-
-        # Call Gemini API
+YOUR ANSWER (concise, knowledge base only):"""
+        
+        prompt = system_prompt.format(context=context_text, query=query)
+        
         try:
+            payload = {
+                "contents": [{
+                    "parts": [{"text": prompt}]
+                }],
+                "generationConfig": {
+                    "temperature": 0.3,
+                    "maxOutputTokens": 500
+                }
+            }
+            
             response = requests.post(
                 self.gemini_url,
-                json={
-                    "contents": [
-                        {
-                            "parts": [
-                                {"text": prompt}
-                            ]
-                        }
-                    ]
-                },
-                headers={"Content-Type": "application/json"}
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=30
             )
             
             if response.status_code == 200:
-                data = response.json()
-                if 'candidates' in data and len(data['candidates']) > 0:
-                    return data['candidates'][0]['content']['parts'][0]['text']
+                result = response.json()
+                if 'candidates' in result and len(result['candidates']) > 0:
+                    answer = result['candidates'][0]['content']['parts'][0]['text']
+                    return answer.strip()
                 else:
-                    return "I don't have this information in the knowledge base provided."
+                    return "I couldn't generate a response. Please try rephrasing your question."
             else:
-                # Log the error for debugging
-                error_msg = f"Gemini API error {response.status_code}: {response.text}"
-                print(error_msg)
-                return "I don't have this information in the knowledge base provided."
+                print(f"Gemini API error: {response.status_code} - {response.text}")
+                return f"Error generating response. Please try again."
                 
+        except requests.exceptions.Timeout:
+            return "Request timed out. Please try again."
         except Exception as e:
-            print(f"Gemini API exception: {str(e)}")
-            return "I don't have this information in the knowledge base provided."
+            print(f"Error calling Gemini API: {e}")
+            return "An error occurred while generating the response."
 
-    def query(self, question: str) -> Dict[str, any]:
-        """Main query function that retrieves context and generates response."""
-        # Retrieve relevant context
-        context = self.retrieve_context(question)
+    def query(self, query: str) -> Dict:
+        context = self.retrieve_context(query)
+        answer = self.generate_response(query, context)
         
-        if not context:
-            return {
-                "answer": "I couldn't find relevant information in the knowledge base. Please make sure PDFs are ingested.",
-                "context": [],
-                "sources": []
-            }
-        
-        # Generate response
-        answer = self.generate_response(question, context)
+        sources = list(set([m['source'] for m in self.metadata if m['text'] in context]))
         
         return {
             "answer": answer,
             "context": context,
-            "num_sources": len(context)
+            "sources": sources
         }

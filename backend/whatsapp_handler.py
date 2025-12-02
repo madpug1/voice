@@ -13,16 +13,13 @@ logger = logging.getLogger(__name__)
 class WhatsAppHandler:
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
-        # Configure AssemblyAI
         aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
     
     def download_audio(self, media_url: str, auth: tuple) -> str:
-        """Download audio file from Twilio."""
         try:
             response = requests.get(media_url, auth=auth)
             response.raise_for_status()
             
-            # Save to temporary file
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.ogg')
             temp_file.write(response.content)
             temp_file.close()
@@ -33,13 +30,11 @@ class WhatsAppHandler:
             raise
     
     def convert_to_wav(self, ogg_file: str) -> str:
-        """Convert OGG audio to WAV format using ffmpeg."""
         try:
             import subprocess
             
             wav_file = ogg_file.replace('.ogg', '.wav')
             
-            # Use ffmpeg to convert
             subprocess.run([
                 'ffmpeg', '-i', ogg_file,
                 '-acodec', 'pcm_s16le',
@@ -51,11 +46,9 @@ class WhatsAppHandler:
             return wav_file
         except Exception as e:
             logger.error(f"Error converting audio: {e}")
-            # If conversion fails, return original file
             return ogg_file
     
     def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio using AssemblyAI from file."""
         try:
             if not os.getenv("ASSEMBLYAI_API_KEY"):
                 logger.error("ASSEMBLYAI_API_KEY not set")
@@ -76,46 +69,38 @@ class WhatsAppHandler:
             return ""
     
     def generate_audio_response(self, text: str) -> str:
-        """Generate audio file from text using gTTS and save to static folder."""
         try:
             import hashlib
             import time
             
-            # Create static/audio directory if it doesn't exist
             static_dir = os.path.join(os.path.dirname(__file__), 'static', 'audio')
             os.makedirs(static_dir, exist_ok=True)
             
-            # Generate unique filename
             timestamp = str(int(time.time()))
             text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
             filename = f"response_{timestamp}_{text_hash}.mp3"
             audio_path = os.path.join(static_dir, filename)
             
-            # Generate speech
             tts = gTTS(text=text, lang='en', slow=False)
             tts.save(audio_path)
             
             logger.info(f"Generated audio response: {filename}")
-            return filename  # Return just the filename, not full path
+            return filename
         except Exception as e:
             logger.error(f"Error generating audio: {e}")
             return None
     
     def process_voice_message(self, media_url: str, auth: tuple) -> Dict[str, str]:
-        """Download and transcribe voice message."""
         audio_file = None
         wav_file = None
         
         try:
-            # Download audio first (AssemblyAI can't access authenticated Twilio URLs)
             logger.info("Downloading voice message...")
             audio_file = self.download_audio(media_url, auth)
             
-            # Convert to WAV format
             logger.info("Converting audio to WAV...")
             wav_file = self.convert_to_wav(audio_file)
             
-            # Transcribe from WAV file
             logger.info("Transcribing with AssemblyAI...")
             transcription = self.transcribe_audio(wav_file)
             
@@ -126,11 +111,9 @@ class WhatsAppHandler:
                     "audio_file": None
                 }
             
-            # Query RAG
             logger.info(f"Querying RAG: {transcription}")
             result = self.rag_engine.query(transcription)
             
-            # Generate audio response
             logger.info("Generating audio response...")
             audio_response = self.generate_audio_response(result['answer'])
             
@@ -148,14 +131,12 @@ class WhatsAppHandler:
                 "audio_file": None
             }
         finally:
-            # Cleanup
             if audio_file and os.path.exists(audio_file):
                 os.unlink(audio_file)
             if wav_file and wav_file != audio_file and os.path.exists(wav_file):
                 os.unlink(wav_file)
     
     def process_text_message(self, text: str) -> str:
-        """Process text message and generate response."""
         try:
             logger.info(f"Processing text: {text}")
             result = self.rag_engine.query(text)

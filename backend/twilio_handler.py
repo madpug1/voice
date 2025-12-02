@@ -10,16 +10,13 @@ class TwilioIVRHandler:
         self.rag_engine = rag_engine
     
     def handle_incoming_call(self) -> str:
-        """Generate TwiML for incoming call with welcome message."""
         response = VoiceResponse()
         
-        # Welcome message
         response.say(
             "Hello! I'm your AI knowledge assistant. You can ask me questions about the documents in my knowledge base.",
             voice='Polly.Joanna'
         )
         
-        # Gather speech input
         gather = Gather(
             input='speech',
             action='/voice/gather',
@@ -33,7 +30,6 @@ class TwilioIVRHandler:
         )
         response.append(gather)
         
-        # Fallback if no input
         response.say(
             "I didn't hear anything. Please try calling again. Goodbye!",
             voice='Polly.Joanna'
@@ -43,7 +39,6 @@ class TwilioIVRHandler:
         return str(response)
     
     def handle_speech_input(self, speech_result: str) -> str:
-        """Process transcribed speech and generate response."""
         logger.info(f"Received speech: {speech_result}")
         
         response = VoiceResponse()
@@ -57,15 +52,12 @@ class TwilioIVRHandler:
             return str(response)
         
         try:
-            # Query RAG engine
             result = self.rag_engine.query(speech_result)
             answer = result['answer']
             logger.info(f"RAG response: {answer}")
             
-            # Speak the answer
             response.say(answer, voice='Polly.Joanna')
             
-            # Ask if they want to continue
             gather = Gather(
                 input='speech',
                 action='/voice/continue',
@@ -80,7 +72,6 @@ class TwilioIVRHandler:
             )
             response.append(gather)
             
-            # Default to ending call
             response.say("Thank you for calling. Goodbye!", voice='Polly.Joanna')
             response.hangup()
             
@@ -95,14 +86,11 @@ class TwilioIVRHandler:
         return str(response)
     
     def handle_continue(self, speech_result: str) -> str:
-        """Handle user's response to continue prompt."""
         logger.info(f"Continue response: {speech_result}")
         
         response = VoiceResponse()
         
-        # Check if user wants to continue
         if speech_result and any(word in speech_result.lower() for word in ['yes', 'yeah', 'sure', 'yep']):
-            # Restart conversation
             gather = Gather(
                 input='speech',
                 action='/voice/gather',
@@ -118,7 +106,6 @@ class TwilioIVRHandler:
             response.say("I didn't hear anything. Goodbye!", voice='Polly.Joanna')
             response.hangup()
         else:
-            # End call
             response.say(
                 "Thank you for calling. Have a great day!",
                 voice='Polly.Joanna'
