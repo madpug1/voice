@@ -32,6 +32,28 @@ class WhatsAppHandler:
             logger.error(f"Error downloading audio: {e}")
             raise
     
+    def convert_to_wav(self, ogg_file: str) -> str:
+        """Convert OGG audio to WAV format using ffmpeg."""
+        try:
+            import subprocess
+            
+            wav_file = ogg_file.replace('.ogg', '.wav')
+            
+            # Use ffmpeg to convert
+            subprocess.run([
+                'ffmpeg', '-i', ogg_file,
+                '-acodec', 'pcm_s16le',
+                '-ar', '16000',
+                '-ac', '1',
+                wav_file
+            ], check=True, capture_output=True)
+            
+            return wav_file
+        except Exception as e:
+            logger.error(f"Error converting audio: {e}")
+            # If conversion fails, return original file
+            return ogg_file
+    
     def transcribe_audio(self, audio_file: str) -> str:
         """Transcribe audio using AssemblyAI from file."""
         try:
@@ -56,15 +78,20 @@ class WhatsAppHandler:
     def process_voice_message(self, media_url: str, auth: tuple) -> Dict[str, str]:
         """Download and transcribe voice message."""
         audio_file = None
+        wav_file = None
         
         try:
             # Download audio first (AssemblyAI can't access authenticated Twilio URLs)
             logger.info("Downloading voice message...")
             audio_file = self.download_audio(media_url, auth)
             
-            # Transcribe from local file
+            # Convert to WAV format
+            logger.info("Converting audio to WAV...")
+            wav_file = self.convert_to_wav(audio_file)
+            
+            # Transcribe from WAV file
             logger.info("Transcribing with AssemblyAI...")
-            transcription = self.transcribe_audio(audio_file)
+            transcription = self.transcribe_audio(wav_file)
             
             if not transcription:
                 return {
@@ -91,6 +118,8 @@ class WhatsAppHandler:
             # Cleanup
             if audio_file and os.path.exists(audio_file):
                 os.unlink(audio_file)
+            if wav_file and wav_file != audio_file and os.path.exists(wav_file):
+                os.unlink(wav_file)
     
     def process_text_message(self, text: str) -> str:
         """Process text message and generate response."""
