@@ -35,7 +35,7 @@ os_module.makedirs(static_dir, exist_ok=True)
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Initialize RAG engine
-pdf_dir = os.getenv("PDF_DATA_DIR", "./data/pdfs")
+pdf_dir = os.getenv("PDF_DATA_DIR", "./data/documents")
 index_path = os.getenv("VECTOR_INDEX_PATH", "./vector_index")
 rag_engine = RAGEngine(index_path=index_path)
 
