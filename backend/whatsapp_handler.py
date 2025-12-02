@@ -1,6 +1,6 @@
 import os
 import requests
-import whisper
+from faster_whisper import WhisperModel
 from gtts import gTTS
 from typing import Dict
 from rag_engine import RAGEngine
@@ -15,7 +15,7 @@ class WhatsAppHandler:
         self.rag_engine = rag_engine
         # Load Whisper model (using tiny model for speed and memory efficiency)
         logger.info("Loading Whisper model...")
-        self.whisper_model = whisper.load_model("tiny")
+        self.whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
         logger.info("Whisper model loaded!")
     
     def download_audio(self, media_url: str, auth: tuple) -> str:
@@ -35,11 +35,11 @@ class WhatsAppHandler:
             raise
     
     def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio using Whisper."""
+        """Transcribe audio using faster-whisper."""
         try:
             logger.info("Transcribing with Whisper...")
-            result = self.whisper_model.transcribe(audio_file)
-            transcription = result["text"].strip()
+            segments, info = self.whisper_model.transcribe(audio_file, beam_size=5)
+            transcription = " ".join([segment.text for segment in segments]).strip()
             logger.info(f"Transcribed: {transcription}")
             return transcription
         except Exception as e:
