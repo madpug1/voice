@@ -203,12 +203,16 @@ Answer:"""
                 if 'candidates' in data and len(data['candidates']) > 0:
                     return data['candidates'][0]['content']['parts'][0]['text']
                 else:
-                    return "Error: No response generated"
+                    return "I don't have this information in the documents provided."
             else:
-                return f"Error: API returned status {response.status_code}"
+                # Log the error for debugging
+                error_msg = f"Gemini API error {response.status_code}: {response.text}"
+                print(error_msg)
+                return "I don't have this information in the documents provided."
                 
         except Exception as e:
-            return f"Error calling Gemini API: {str(e)}"
+            print(f"Gemini API exception: {str(e)}")
+            return "I don't have this information in the documents provided."
 
     def query(self, question: str) -> Dict[str, any]:
         """Main query function that retrieves context and generates response."""
