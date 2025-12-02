@@ -183,12 +183,24 @@ async def whatsapp_incoming(
             auth = (twilio_account_sid, twilio_auth_token)
             result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
             
+            
             if result['transcription']:
-                # Just send the answer directly
-                answer = result['text']
-                if len(answer) > 1600:
-                    answer = answer[:1597] + "..."
-                response.message(answer)
+                # Send audio response if available
+                if result.get('audio_file'):
+                    # Get the public URL for the audio file  
+                    base_url = os.getenv("RENDER_EXTERNAL_URL", "https://rag-phone-bot.onrender.com")
+                    audio_url = f"{base_url}/static/audio/{result['audio_file']}"
+                    
+                    # Send audio as media
+                    msg = response.message()
+                    msg.media(audio_url)
+                    logger.info(f"Sending audio response: {audio_url}")
+                else:
+                    # Fallback to text
+                    answer = result['text']
+                    if len(answer) > 1600:
+                        answer = answer[:1597] + "..."
+                    response.message(answer)
             else:
                 response.message(result['text'][:1600])
         
