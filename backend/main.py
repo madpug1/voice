@@ -210,10 +210,14 @@ async def whatsapp_incoming(
                     base_url = os.getenv("RENDER_EXTERNAL_URL", "https://rag-phone-bot.onrender.com")
                     audio_url = f"{base_url}/static/audio/{result['audio_file']}"
                     
-                    # Send audio as media
-                    msg = response.message()
-                    msg.media(audio_url)
-                    logger.info(f"Sending audio response: {audio_url}")
+                    # First, send the transcription text so user can verify
+                    transcription_msg = f"🎤 You said: \"{result['transcription']}\""
+                    msg = response.message(transcription_msg)
+                    
+                    # Then send audio as media
+                    audio_msg = response.message()
+                    audio_msg.media(audio_url)
+                    logger.info(f"Sending transcription + audio response: {audio_url}")
                 else:
                     # Fallback to text
                     answer = result['text']
