@@ -1,6 +1,6 @@
 import os
 import requests
-from faster_whisper import WhisperModel
+import assemblyai as aai
 from gtts import gTTS
 from typing import Dict
 from rag_engine import RAGEngine
@@ -13,10 +13,8 @@ logger = logging.getLogger(__name__)
 class WhatsAppHandler:
     def __init__(self, rag_engine: RAGEngine):
         self.rag_engine = rag_engine
-        # Load Whisper model (using tiny model for speed and memory efficiency)
-        logger.info("Loading Whisper model...")
-        self.whisper_model = WhisperModel("tiny", device="cpu", compute_type="int8")
-        logger.info("Whisper model loaded!")
+        # Configure AssemblyAI
+        aai.settings.api_key = os.getenv("ASSEMBLYAI_API_KEY")
     
     def download_audio(self, media_url: str, auth: tuple) -> str:
         """Download audio file from Twilio."""
@@ -35,13 +33,22 @@ class WhatsAppHandler:
             raise
     
     def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio using faster-whisper."""
+        """Transcribe audio using AssemblyAI."""
         try:
-            logger.info("Transcribing with Whisper...")
-            segments, info = self.whisper_model.transcribe(audio_file, beam_size=5)
-            transcription = " ".join([segment.text for segment in segments]).strip()
-            logger.info(f"Transcribed: {transcription}")
-            return transcription
+            if not os.getenv("ASSEMBLYAI_API_KEY"):
+                logger.error("ASSEMBLYAI_API_KEY not set")
+                return ""
+            
+            logger.info("Transcribing with AssemblyAI...")
+            transcriber = aai.Transcriber()
+            transcript = transcriber.transcribe(audio_file)
+            
+            if transcript.status == aai.TranscriptStatus.error:
+                logger.error(f"Transcription error: {transcript.error}")
+                return ""
+            
+            logger.info(f"Transcribed: {transcript.text}")
+            return transcript.text
         except Exception as e:
             logger.error(f"Transcription error: {e}")
             return ""
@@ -56,7 +63,6 @@ class WhatsAppHandler:
             audio_file = self.download_audio(media_url, auth)
             
             # Transcribe
-            logger.info("Transcribing audio...")
             transcription = self.transcribe_audio(audio_file)
             
             if not transcription:
