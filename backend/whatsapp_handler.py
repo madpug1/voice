@@ -76,18 +76,27 @@ class WhatsAppHandler:
             return ""
     
     def generate_audio_response(self, text: str) -> str:
-        """Generate audio file from text using gTTS."""
+        """Generate audio file from text using gTTS and save to static folder."""
         try:
-            # Create temporary file for audio
-            audio_file = tempfile.NamedTemporaryFile(delete=False, suffix='.mp3')
-            audio_file.close()
+            import hashlib
+            import time
+            
+            # Create static/audio directory if it doesn't exist
+            static_dir = os.path.join(os.path.dirname(__file__), 'static', 'audio')
+            os.makedirs(static_dir, exist_ok=True)
+            
+            # Generate unique filename
+            timestamp = str(int(time.time()))
+            text_hash = hashlib.md5(text.encode()).hexdigest()[:8]
+            filename = f"response_{timestamp}_{text_hash}.mp3"
+            audio_path = os.path.join(static_dir, filename)
             
             # Generate speech
             tts = gTTS(text=text, lang='en', slow=False)
-            tts.save(audio_file.name)
+            tts.save(audio_path)
             
-            logger.info(f"Generated audio response: {audio_file.name}")
-            return audio_file.name
+            logger.info(f"Generated audio response: {filename}")
+            return filename  # Return just the filename, not full path
         except Exception as e:
             logger.error(f"Error generating audio: {e}")
             return None

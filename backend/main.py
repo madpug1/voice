@@ -1,6 +1,7 @@
 from fastapi import FastAPI, HTTPException, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from rag_engine import RAGEngine
 from twilio_handler import TwilioIVRHandler
@@ -26,6 +27,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for audio responses
+import os as os_module
+static_dir = os_module.path.join(os_module.path.dirname(__file__), 'static')
+os_module.makedirs(static_dir, exist_ok=True)
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 # Initialize RAG engine
 pdf_dir = os.getenv("PDF_DATA_DIR", "./data/pdfs")
