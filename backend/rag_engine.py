@@ -14,8 +14,8 @@ class RAGEngine:
     def __init__(self, index_path: str = "./vector_index"):
         """Initialize the RAG engine with TF-IDF vectorizer."""
         self.index_path = index_path
-        # Increase max_features to capture more unique terms from smaller documents
-        self.vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
+        # Use all unique words (no limit) to ensure small documents are fully indexed
+        self.vectorizer = TfidfVectorizer(max_features=None, stop_words='english')
         
         # Storage for documents and vectors
         self.index_file = os.path.join(index_path, "vectors.pkl")
@@ -81,6 +81,16 @@ class RAGEngine:
             os.remove(self.index_file)
         if os.path.exists(self.metadata_file):
             os.remove(self.metadata_file)
+
+        # EXPLICITLY REMOVE GHOST FILE if it exists
+        ghost_file = os.path.join(pdf_directory, "Akshaykumar_Pillai_Personal_Intro.pdf")
+        if os.path.exists(ghost_file):
+            print(f"👻 Found and removing ghost file: {ghost_file}")
+            try:
+                os.remove(ghost_file)
+                print("✅ Ghost file exorcised!")
+            except Exception as e:
+                print(f"❌ Failed to remove ghost file: {e}")
             
         pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith('.pdf')]
         
@@ -117,6 +127,7 @@ class RAGEngine:
         # Vectorize all chunks at once
         if all_chunks:
             self.vectors = self.vectorizer.fit_transform(all_chunks)
+            print(f"✅ Vocabulary size: {len(self.vectorizer.vocabulary_)} unique terms")
             self.save_index()
         
         return {
