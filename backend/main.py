@@ -141,18 +141,6 @@ async def whatsapp_incoming(
 ):
     logger.info(f"Received WhatsApp message from {From}")
     
-    response = MessagingResponse()
-    
-    try:
-        if NumMedia > 0 and MediaContentType0 and 'audio' in MediaContentType0 and MediaUrl0:
-            logger.info("Processing voice message...")
-            
-            auth = (twilio_account_sid, twilio_auth_token)
-            result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
-            
-            
-            if result['transcription']:
-                if result.get('audio_file'):
                     base_url = os.getenv("RENDER_EXTERNAL_URL", "https://rag-phone-bot.onrender.com")
                     audio_url = f"{base_url}/static/audio/{result['audio_file']}"
                     
