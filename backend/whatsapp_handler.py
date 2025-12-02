@@ -32,8 +32,8 @@ class WhatsAppHandler:
             logger.error(f"Error downloading audio: {e}")
             raise
     
-    def transcribe_audio(self, audio_file: str) -> str:
-        """Transcribe audio using AssemblyAI."""
+    def transcribe_audio(self, media_url: str) -> str:
+        """Transcribe audio using AssemblyAI from URL."""
         try:
             if not os.getenv("ASSEMBLYAI_API_KEY"):
                 logger.error("ASSEMBLYAI_API_KEY not set")
@@ -41,7 +41,8 @@ class WhatsAppHandler:
             
             logger.info("Transcribing with AssemblyAI...")
             transcriber = aai.Transcriber()
-            transcript = transcriber.transcribe(audio_file)
+            # Transcribe directly from URL
+            transcript = transcriber.transcribe(media_url)
             
             if transcript.status == aai.TranscriptStatus.error:
                 logger.error(f"Transcription error: {transcript.error}")
@@ -55,15 +56,10 @@ class WhatsAppHandler:
     
     def process_voice_message(self, media_url: str, auth: tuple) -> Dict[str, str]:
         """Download and transcribe voice message."""
-        audio_file = None
-        
         try:
-            # Download audio
-            logger.info("Downloading voice message...")
-            audio_file = self.download_audio(media_url, auth)
-            
-            # Transcribe
-            transcription = self.transcribe_audio(audio_file)
+            # Transcribe directly from URL (AssemblyAI will download it)
+            logger.info("Transcribing voice message from URL...")
+            transcription = self.transcribe_audio(media_url)
             
             if not transcription:
                 return {
@@ -86,10 +82,6 @@ class WhatsAppHandler:
                 "text": "Sorry, I encountered an error processing your voice message. Please try sending a text message.",
                 "transcription": ""
             }
-        finally:
-            # Cleanup
-            if audio_file and os.path.exists(audio_file):
-                os.unlink(audio_file)
     
     def process_text_message(self, text: str) -> str:
         """Process text message and generate response."""
