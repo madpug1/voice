@@ -128,24 +128,47 @@ class RAGEngine:
     def retrieve_context(self, query: str, top_k: int = 3) -> List[str]:
         """Retrieve relevant chunks using TF-IDF similarity."""
         if self.vectors is None or len(self.metadata) == 0:
+            print("⚠️  Index is empty")
             return []
         
-        # Vectorize query
-        query_vector = self.vectorizer.transform([query])
-        
-        # Calculate cosine similarity
-        similarities = cosine_similarity(query_vector, self.vectors)[0]
-        
-        # Get top k indices
-        top_indices = np.argsort(similarities)[-top_k:][::-1]
-        
-        # Get corresponding texts
-        results = []
-        for idx in top_indices:
-            if idx < len(self.metadata):
-                results.append(self.metadata[idx]["text"])
-        
-        return results
+        try:
+            print(f"🔍 Processing Query: '{query}'")
+            
+            # Check if query terms are in vocabulary
+            terms = query.lower().split()
+            known_terms = [t for t in terms if t in self.vectorizer.vocabulary_]
+            print(f"   Vocabulary matches: {known_terms} (out of {terms})")
+            
+            # Vectorize query
+            query_vector = self.vectorizer.transform([query])
+            
+            # Check if query vector is empty
+            if query_vector.nnz == 0:
+                print(f"⚠️  Query has NO matching terms in the vocabulary!")
+                return []
+            
+            # Calculate cosine similarity
+            similarities = cosine_similarity(query_vector, self.vectors).flatten()
+            
+            # Get top k indices
+            top_indices = np.argsort(similarities)[-top_k:][::-1]
+            
+            # Get corresponding texts
+            results = []
+            for idx in top_indices:
+                score = similarities[idx]
+                if score > 0:
+                    meta = self.metadata[idx]
+                    print(f"   📄 Match: {meta['source']} (Score: {score:.4f})")
+                    results.append(meta["text"])
+            
+            if not results:
+                print("⚠️  No relevant chunks found (all scores 0)")
+                
+            return results
+        except Exception as e:
+            print(f"Error retrieving context: {e}")
+            return []
 
     def generate_response(self, query: str, context: List[str]) -> str:
         """Generate a response using Gemini API with retrieved context."""
