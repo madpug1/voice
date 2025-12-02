@@ -167,27 +167,38 @@ async def whatsapp_incoming(
     
     response = MessagingResponse()
     
-    # Check if there's a voice message
-    if NumMedia > 0 and MediaContentType0 and 'audio' in MediaContentType0 and MediaUrl0:
-        logger.info("Processing voice message...")
+    try:
+        # Check if there's a voice message
+        if NumMedia > 0 and MediaContentType0 and 'audio' in MediaContentType0 and MediaUrl0:
+            logger.info("Processing voice message...")
+            
+            # Download and transcribe voice message
+            auth = (twilio_account_sid, twilio_auth_token)
+            result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
+            
+            if result['transcription']:
+                msg = f"🎤 You said: {result['transcription']}\n\n{result['text']}"
+                # Limit to 1600 chars for WhatsApp
+                if len(msg) > 1600:
+                    msg = msg[:1597] + "..."
+                response.message(msg)
+            else:
+                response.message(result['text'][:1600])
         
-        # Download and transcribe voice message
-        auth = (twilio_account_sid, twilio_auth_token)
-        result = whatsapp_handler.process_voice_message(MediaUrl0, auth)
+        elif Body:
+            # Handle text message
+            logger.info(f"Processing text message: {Body}")
+            answer = whatsapp_handler.process_text_message(Body)
+            # Limit to 1600 chars
+            if len(answer) > 1600:
+                answer = answer[:1597] + "..."
+            response.message(answer)
         
-        if result['transcription']:
-            response.message(f"🎤 You said: {result['transcription']}\n\n{result['text']}")
         else:
-            response.message(result['text'])
-    
-    elif Body:
-        # Handle text message
-        logger.info(f"Processing text message: {Body}")
-        answer = whatsapp_handler.process_text_message(Body)
-        response.message(answer)
-    
-    else:
-        response.message("Please send a text message or voice note with your question!")
+            response.message("Please send a text message or voice note with your question!")
+    except Exception as e:
+        logger.error(f"WhatsApp error: {e}")
+        response.message("Sorry, I encountered an error. Please try again.")
     
     return Response(content=str(response), media_type="application/xml")
 
