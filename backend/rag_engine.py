@@ -70,33 +70,29 @@ class RAGEngine:
         with open(self.metadata_file, 'wb') as f:
             pickle.dump(self.metadata, f)
 
+    def clear_index(self):
+        """Completely clear vectors and metadata, both in memory and on disk."""
+        self.metadata = []
+        self.vectors = None
+        if os.path.exists(self.index_file):
+            os.remove(self.index_file)
+        if os.path.exists(self.metadata_file):
+            os.remove(self.metadata_file)
+
     def ingest_pdfs(self, pdf_directory: str) -> Dict[str, int]:
         """Load and index all PDFs from the specified directory."""
         if not os.path.exists(pdf_directory):
             os.makedirs(pdf_directory)
             return {"status": "error", "message": "PDF directory created but empty", "count": 0}
-        
-        # EXPLICITLY REMOVE GHOST FILE FIRST (before listing directory!)
-        ghost_file = os.path.join(pdf_directory, "Akshaykumar_Pillai_Personal_Intro.pdf")
-        if os.path.exists(ghost_file):
-            print(f"👻 Found and removing ghost file: {ghost_file}")
-            try:
-                os.remove(ghost_file)
-                print("✅ Ghost file exorcised!")
-            except Exception as e:
-                print(f"❌ Failed to remove ghost file: {e}")
-        
-        # Force clean slate: remove existing index files
-        if os.path.exists(self.index_file):
-            os.remove(self.index_file)
-        if os.path.exists(self.metadata_file):
-            os.remove(self.metadata_file)
-            
+
+        # 🔁 HARD RESET: clear in-memory index + metadata
+        self.clear_index()
+
         pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith('.pdf')]
-        
+
         if not pdf_files:
             return {"status": "warning", "message": "No PDF files found", "count": 0}
-        
+
         all_chunks = []
         total_chunks = 0
         

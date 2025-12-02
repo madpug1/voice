@@ -106,6 +106,12 @@ async def debug_index():
         "documents": documents
     }
 
+@app.get("/clear_index")
+async def clear_index():
+    """Clear the entire index (for debugging)."""
+    rag_engine.clear_index()
+    return {"status": "success", "message": "Index cleared. Call /ingest to rebuild."}
+
 @app.post("/ingest")
 async def ingest_pdfs():
     """
