@@ -76,13 +76,7 @@ class RAGEngine:
             os.makedirs(pdf_directory)
             return {"status": "error", "message": "PDF directory created but empty", "count": 0}
         
-        # Force clean slate: remove existing index files
-        if os.path.exists(self.index_file):
-            os.remove(self.index_file)
-        if os.path.exists(self.metadata_file):
-            os.remove(self.metadata_file)
-
-        # EXPLICITLY REMOVE GHOST FILE if it exists
+        # EXPLICITLY REMOVE GHOST FILE FIRST (before listing directory!)
         ghost_file = os.path.join(pdf_directory, "Akshaykumar_Pillai_Personal_Intro.pdf")
         if os.path.exists(ghost_file):
             print(f"👻 Found and removing ghost file: {ghost_file}")
@@ -91,6 +85,12 @@ class RAGEngine:
                 print("✅ Ghost file exorcised!")
             except Exception as e:
                 print(f"❌ Failed to remove ghost file: {e}")
+        
+        # Force clean slate: remove existing index files
+        if os.path.exists(self.index_file):
+            os.remove(self.index_file)
+        if os.path.exists(self.metadata_file):
+            os.remove(self.metadata_file)
             
         pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith('.pdf')]
         
