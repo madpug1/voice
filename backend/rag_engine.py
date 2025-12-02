@@ -14,7 +14,8 @@ class RAGEngine:
     def __init__(self, index_path: str = "./vector_index"):
         """Initialize the RAG engine with TF-IDF vectorizer."""
         self.index_path = index_path
-        self.vectorizer = TfidfVectorizer(max_features=1000, stop_words='english')
+        # Increase max_features to capture more unique terms from smaller documents
+        self.vectorizer = TfidfVectorizer(max_features=5000, stop_words='english')
         
         # Storage for documents and vectors
         self.index_file = os.path.join(index_path, "vectors.pkl")
