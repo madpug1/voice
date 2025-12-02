@@ -76,6 +76,12 @@ class RAGEngine:
             os.makedirs(pdf_directory)
             return {"status": "error", "message": "PDF directory created but empty", "count": 0}
         
+        # Force clean slate: remove existing index files
+        if os.path.exists(self.index_file):
+            os.remove(self.index_file)
+        if os.path.exists(self.metadata_file):
+            os.remove(self.metadata_file)
+            
         pdf_files = [f for f in os.listdir(pdf_directory) if f.endswith('.pdf')]
         
         if not pdf_files:
