@@ -192,6 +192,7 @@ async def whatsapp_incoming(
             # Limit to 1600 chars
             if len(answer) > 1600:
                 answer = answer[:1597] + "..."
+            logger.info(f"Sending response: {answer[:100]}...")  # Log first 100 chars
             response.message(answer)
         
         else:
@@ -200,6 +201,7 @@ async def whatsapp_incoming(
         logger.error(f"WhatsApp error: {e}")
         response.message("Sorry, I encountered an error. Please try again.")
     
+    logger.info(f"TwiML response: {str(response)[:200]}")  # Log the TwiML
     return Response(content=str(response), media_type="application/xml")
 
 if __name__ == "__main__":
